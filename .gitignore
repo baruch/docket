@@ -1,0 +1,9 @@
+*.o
+.*.d
+.ninja*
+build.ninja
+.*.swp
+docketd
+docket
+tags
+libwire.a
