@@ -327,6 +327,11 @@ static void task_docket_run(void *arg)
 static void task_accept_run(void *arg)
 {
 	UNUSED(arg);
+	struct sockaddr sa;
+	socklen_t salen;
+	int ret;
+	char host[32];
+	char serv[32];
 
 	wire_log(WLOG_INFO, "dockerd starting up");
 
@@ -343,9 +348,17 @@ static void task_accept_run(void *arg)
 		wire_fd_mode_read(&fd_state);
 		wire_fd_wait(&fd_state);
 
-		int new_fd = accept(fd, NULL, NULL);
+		memset(&sa, 0, sizeof(sa));
+		salen = sizeof(sa);
+		int new_fd = accept(fd, &sa, &salen);
 		if (new_fd >= 0) {
-			wire_log(WLOG_INFO, "New connection: fd=%d\n", new_fd);
+			ret = wio_getnameinfo(&sa, salen, host, sizeof(host), serv, sizeof(serv), NI_NUMERICHOST|NI_NUMERICSERV);
+			if (ret == 0) {
+				wire_log(WLOG_INFO, "New connection: fd=%d origin=%s:%s", fd, host, serv);
+			} else {
+				wire_log(WLOG_INFO, "New connection: fd=%d (failed to resolve address, error=%d %s)\n", new_fd, ret, gai_strerror(ret));
+			}
+
 			wire_t *task = wire_pool_alloc_block(&docket_pool, "docket", task_docket_run, (void*)(long int)new_fd);
 			if (!task) {
 				wire_log(WLOG_ERR, "Docket is busy, sorry\n");
