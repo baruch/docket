@@ -224,11 +224,17 @@ static void task_line_process(void *arg)
 	if (strcmp(args[0], "FILE") == 0) {
 		if (num_args >= 3)
 			file_collector(state, args[1], args[2]);
+		else
+			wire_log(WLOG_ERR, "Not enough arguments to FILE collector, got %d args", num_args);
 	} else if (strcmp(args[0], "PREFIX") == 0) {
 		if (num_args >= 2) {
 			strncpy(state->prefix, args[1], sizeof(state->prefix));
 			state->prefix[sizeof(state->prefix)-1] = 0;
+		} else {
+			wire_log(WLOG_ERR, "Not enough arguments to PREFIX collector, got %d args", num_args);
 		}
+	} else {
+		wire_log(WLOG_ERR, "Unknown collector requested '%s'", args[0]);
 	}
 
 	state->remaining--;
