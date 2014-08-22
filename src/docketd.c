@@ -369,11 +369,11 @@ static void task_accept_run(void *arg)
 	char host[32];
 	char serv[32];
 
-	wire_log(WLOG_INFO, "dockerd starting up");
+	wire_log(WLOG_INFO, "docketd starting up");
 
 	int fd = socket_setup(DOCKET_PORT);
 	if (fd < 0) {
-		wire_log(WLOG_FATAL, "dockerd failed to bind to socket, bailing out.");
+		wire_log(WLOG_FATAL, "docketd failed to bind to socket, bailing out.");
 		return;
 	}
 
