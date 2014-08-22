@@ -144,19 +144,19 @@ static void file_collector(docket_state_t *state, char *dir, char *filename)
 	char buf[48*1024];
 	int nrcvd;
 
-	printf("Collect file %s\n", filename);
+	wire_log(WLOG_INFO, "fd %d Collect file %s", state->write_net.fd_state.fd, filename);
 
 	fd = wio_open(filename, O_RDONLY, 0);
 	if (fd < 0) {
 		// TODO: Log error
-		printf("Failed to open file %s: %m\n", filename);
+		wire_log(WLOG_ERR, "fd %d Failed to open file %s: %m", state->write_net.fd_state.fd, filename);
 		return;
 	}
 
 	ret = wio_fstat(fd, &stbuf);
 	if (ret < 0) {
 		// TODO: Log error
-		printf("Failed to fstat file %s: %m\n", filename);
+		wire_log(WLOG_INFO, "fd %d Failed to fstat file %s: %m", filename);
 		wio_close(fd);
 		return;
 	}
@@ -164,7 +164,7 @@ static void file_collector(docket_state_t *state, char *dir, char *filename)
 	nrcvd = wio_read(fd, buf, sizeof(buf));
 	if (nrcvd < 0) {
 		// TODO: Log error
-		printf("Failed to read file %s: %m\n", filename);
+		wire_log(WLOG_INFO, "fd %d Failed to read file %s: %m\n", state->write_net.fd_state.fd, filename);
 		wio_close(fd);
 		return;
 	}
