@@ -8,6 +8,7 @@
 #include "wire_pool.h"
 #include "wire_stack.h"
 #include "wire_lock.h"
+#include "wire_log.h"
 #include "macros.h"
 #include <stdio.h>
 #include <unistd.h>
@@ -55,7 +56,7 @@ static int socket_setup(unsigned short port)
 {
 	int fd = socket(AF_INET, SOCK_STREAM, 0);
 	if (fd < 0) {
-		perror("Failed to create socket");
+		wire_log(WLOG_ERR, "Failed to create socket: %m");
 		return -1;
 	}
 
@@ -69,15 +70,15 @@ static int socket_setup(unsigned short port)
 
 	int ret = bind(fd, (struct sockaddr*)&addr, sizeof(addr));
 	if (ret < 0) {
-		perror("Failed to bind to socket");
-		close(fd);
+		wire_log(WLOG_ERR, "Failed to bind to socket on port %hd: %m", port);
+		wio_close(fd);
 		return -1;
 	}
 
 	ret = listen(fd, 100);
 	if (ret < 0) {
-		perror("failed to listen to port");
-		close(fd);
+		wire_log(WLOG_ERR, "Failed to listen to port %hd: %m", port);
+		wio_close(fd);
 		return -1;
 	}
 
@@ -221,7 +222,6 @@ static void task_line_process(void *arg)
 	state->remaining++;
 
 	if (strcmp(args[0], "FILE") == 0) {
-		printf("file collector %d\n", num_args);
 		if (num_args >= 3)
 			file_collector(state, args[1], args[2]);
 	} else if (strcmp(args[0], "PREFIX") == 0) {
@@ -321,16 +321,20 @@ static void task_docket_run(void *arg)
 		}
 	}
 
-	printf("docket is done\n");
+	wire_log(WLOG_INFO, "Collection for fd %d is done", fd);
 }
 
 static void task_accept_run(void *arg)
 {
 	UNUSED(arg);
 
+	wire_log(WLOG_INFO, "dockerd starting up");
+
 	int fd = socket_setup(DOCKET_PORT);
-	if (fd < 0)
+	if (fd < 0) {
+		wire_log(WLOG_FATAL, "dockerd failed to bind to socket, bailing out.");
 		return;
+	}
 
 	wire_fd_state_t fd_state;
 	wire_fd_mode_init(&fd_state, fd);
@@ -341,15 +345,15 @@ static void task_accept_run(void *arg)
 
 		int new_fd = accept(fd, NULL, NULL);
 		if (new_fd >= 0) {
-			printf("New connection: %d\n", new_fd);
+			wire_log(WLOG_INFO, "New connection: fd=%d\n", new_fd);
 			wire_t *task = wire_pool_alloc_block(&docket_pool, "docket", task_docket_run, (void*)(long int)new_fd);
 			if (!task) {
-				printf("Docket is busy, sorry\n");
+				wire_log(WLOG_ERR, "Docket is busy, sorry\n");
 				wio_close(new_fd);
 			}
 		} else {
 			if (errno != EINTR && errno != EAGAIN) {
-				perror("Error accepting from listening socket");
+				wire_log(WLOG_FATAL, "Error accepting from listening socket: %m");
 				break;
 			}
 		}
@@ -361,6 +365,7 @@ int main()
 	wire_thread_init(&wire_main);
 	wire_fd_init();
 	wire_io_init(8);
+	wire_log_init_stdout();
 	wire_pool_init(&docket_pool, NULL, 128, 64*1024);
 	wire_init(&task_accept, "accept", task_accept_run, NULL, WIRE_STACK_ALLOC(4096));
 	wire_thread_run();
