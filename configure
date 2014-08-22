@@ -1,5 +1,9 @@
 #!/usr/bin/python
 
+common_srcs = [
+        'tar'
+]
+
 docketd_srcs = [
         'docketd'
 ]
@@ -68,12 +72,17 @@ all_targets = []
 lib = ['libwire.a']
 srcs_tags = []
 
+common_objs = []
+for source in common_srcs:
+    srcs_tags.append(src(source) + '.c')
+    common_objs += cc(source, src)
+
 for app in apps:
     objs = []
     for source in apps[app]:
         srcs_tags.append(src(source) + '.c')
         objs += cc(source, src)
-    all_targets += n.build(app, 'link', objs, implicit=lib, variables=[('libs', lib)])
+    all_targets += n.build(app, 'link', objs + common_objs, implicit=lib, variables=[('libs', lib)])
     n.newline()
 
 #test_exec = []
@@ -103,7 +112,7 @@ n.subninja('build.ninja.libwire')
 n.newline()
 
 n.rule('tags',
-        command='ctags $in',
+        command='ctags -R',
         description='CTAGS $out'
         )
 all_targets += n.build('tags', 'tags', srcs_tags)
