@@ -20,6 +20,7 @@
 #include <netinet/ip.h>
 #include <time.h>
 #include <assert.h>
+#include <stdarg.h>
 
 #define MAX_ARGS 20
 
@@ -35,6 +36,8 @@ typedef struct docket_state {
 	int auto_close;
 	char prefix[128];
 	char *line;
+	unsigned log_len;
+	char log[512*1024];
 } docket_state_t;
 
 static void set_nonblock(int fd)
@@ -83,6 +86,26 @@ static int socket_setup(unsigned short port)
 	}
 
 	return fd;
+}
+
+static void docket_log(docket_state_t *state, const char *fmt, ...)
+{
+	va_list ap;
+	int written;
+	size_t space = sizeof(state->log) - state->log_len;
+
+	va_start(ap, fmt);
+	written = vsnprintf(state->log + state->log_len, space, fmt, ap);
+	va_end(ap);
+
+	if (written > 0 && written <= space) {
+		state->log_len += written;
+		if (state->log_len < sizeof(state->log)) {
+			state->log[state->log_len++] = '\n';
+		}
+	}
+
+	//TODO: wire_logv(WLOG_INFO, fmt, ap);
 }
 
 static void send_buf(docket_state_t *state, const char *buf, unsigned buf_len)
@@ -136,6 +159,11 @@ static void send_all(docket_state_t *state, char *dir, char *filename, char *buf
 	wire_lock_release(&state->write_lock);
 }
 
+static void send_log_file(docket_state_t *state)
+{
+	send_all(state, ".", "docket.log", state->log, state->log_len);
+}
+
 static void file_collector(docket_state_t *state, char *dir, char *filename)
 {
 	int fd;
@@ -144,19 +172,19 @@ static void file_collector(docket_state_t *state, char *dir, char *filename)
 	char buf[48*1024];
 	int nrcvd;
 
-	wire_log(WLOG_INFO, "fd %d Collect file %s", state->write_net.fd_state.fd, filename);
+	docket_log(state, "Collect file %s", filename);
 
 	fd = wio_open(filename, O_RDONLY, 0);
 	if (fd < 0) {
 		// TODO: Log error
-		wire_log(WLOG_ERR, "fd %d Failed to open file %s: %m", state->write_net.fd_state.fd, filename);
+		docket_log(state, "Failed to open file %s: %m", filename);
 		return;
 	}
 
 	ret = wio_fstat(fd, &stbuf);
 	if (ret < 0) {
 		// TODO: Log error
-		wire_log(WLOG_INFO, "fd %d Failed to fstat file %s: %m", filename);
+		docket_log(state, "Failed to fstat file %s: %m", filename);
 		wio_close(fd);
 		return;
 	}
@@ -164,7 +192,7 @@ static void file_collector(docket_state_t *state, char *dir, char *filename)
 	nrcvd = wio_read(fd, buf, sizeof(buf));
 	if (nrcvd < 0) {
 		// TODO: Log error
-		wire_log(WLOG_INFO, "fd %d Failed to read file %s: %m\n", state->write_net.fd_state.fd, filename);
+		docket_log(state, "Failed to read file %s: %m\n", filename);
 		wio_close(fd);
 		return;
 	}
@@ -217,31 +245,29 @@ static void task_line_process(void *arg)
 	}
 
 	if (num_args == 0)
-		return;
-
-	state->remaining++;
+		goto Exit;
 
 	if (strcmp(args[0], "FILE") == 0) {
 		if (num_args >= 3)
 			file_collector(state, args[1], args[2]);
 		else
-			wire_log(WLOG_ERR, "Not enough arguments to FILE collector, got %d args", num_args);
+			docket_log(state, "Not enough arguments to FILE collector, got %d args", num_args);
 	} else if (strcmp(args[0], "PREFIX") == 0) {
 		if (num_args >= 2) {
 			strncpy(state->prefix, args[1], sizeof(state->prefix));
 			state->prefix[sizeof(state->prefix)-1] = 0;
 		} else {
-			wire_log(WLOG_ERR, "Not enough arguments to PREFIX collector, got %d args", num_args);
+			docket_log(state, "Not enough arguments to PREFIX collector, got %d args", num_args);
 		}
 	} else {
-		wire_log(WLOG_ERR, "Unknown collector requested '%s'", args[0]);
+		docket_log(state, "Unknown collector requested '%s'", args[0]);
 	}
 
+Exit:
 	state->remaining--;
 
 	// We are the last one standing, close the connection
 	if (state->auto_close && state->remaining == 0) {
-		wire_net_close(&state->write_net);
 		wire_wait_resume(&state->wait);
 	}
 }
@@ -263,6 +289,7 @@ static int launch_collectors(docket_state_t *state, char *buf, size_t buf_len, s
 			break;
 		}
 
+		state->remaining++;
 		state->line = line;
 		wire_pool_alloc_block(&docket_pool, "line processor", task_line_process, state);
 		wire_yield(); // Wait for the wire to copy the line to itself
@@ -294,6 +321,7 @@ static void task_docket_run(void *arg)
 	wire_lock_init(&state.write_lock);
 	state.remaining = 0;
 	state.auto_close = 0;
+	state.log_len = 0;
 
 	// Do the reads
 	do {
@@ -320,11 +348,13 @@ static void task_docket_run(void *arg)
 	if (eof_rcvd) {
 		if (state.remaining == 0) {
 			// Nothing left to wait for, we close the write fd
-			wire_net_close(&state.write_net);
 		} else {
 			state.auto_close = 1;
 			wire_wait_single(&state.wait);
 		}
+		docket_log(&state, "Docket collection done");
+		send_log_file(&state);
+		wire_net_close(&state.write_net);
 	}
 
 	wire_log(WLOG_INFO, "Collection for fd %d is done", fd);
@@ -385,7 +415,7 @@ int main()
 	wire_fd_init();
 	wire_io_init(8);
 	wire_log_init_stdout();
-	wire_pool_init(&docket_pool, NULL, 128, 64*1024);
+	wire_pool_init(&docket_pool, NULL, 32, 1024*1024);
 	wire_init(&task_accept, "accept", task_accept_run, NULL, WIRE_STACK_ALLOC(4096));
 	wire_thread_run();
 	return 0;
