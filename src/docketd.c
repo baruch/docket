@@ -179,8 +179,8 @@ static void file_collector(docket_state_t *state, char *dir, char *filename)
 	int fd;
 	int ret;
 	struct stat stbuf;
-	char buf[48*1024];
 	int nrcvd;
+	char buf[900*1024];
 
 	docket_log(state, "Collect file %s", filename);
 
