@@ -150,18 +150,18 @@ static void send_tar_header(docket_state_t *state, const char *dir, char *filena
 	wire_net_write(&state->write_net, &hdr, sizeof(hdr), &sent);
 }
 
-static void send_all(docket_state_t *state, char *dir, char *filename, char *buf, int buf_len)
+static void send_all(docket_state_t *state, char *dir, char *filename, char *buf, int buf_len, size_t buf_sz)
 {
 	wire_lock_take(&state->write_lock);
 	send_tar_header(state, dir, filename, buf_len);
 	send_buf(state, buf, buf_len);
-	send_tar_pad(state, buf, buf_len, buf_len);
+	send_tar_pad(state, buf, buf_sz, buf_len);
 	wire_lock_release(&state->write_lock);
 }
 
 static void send_log_file(docket_state_t *state)
 {
-	send_all(state, ".", "docket.log", state->log, state->log_len);
+	send_all(state, ".", "docket.log", state->log, state->log_len, sizeof(state->log));
 }
 
 static void file_collector(docket_state_t *state, char *dir, char *filename)
@@ -205,7 +205,7 @@ static void file_collector(docket_state_t *state, char *dir, char *filename)
 
 	if (stbuf.st_size == 0) {
 		// Read a proc/sysfs file, unknown size, assume fitting into a fixed buffer in one read
-		send_all(state, dir, filename, buf, nrcvd);
+		send_all(state, dir, filename, buf, nrcvd, sizeof(buf));
 	} else {
 		// Read a regular file, known file in advance, requires more than one read
 		int nsent = 0;
