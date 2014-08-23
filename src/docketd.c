@@ -108,6 +108,16 @@ static void docket_log(docket_state_t *state, const char *fmt, ...)
 	//TODO: wire_logv(WLOG_INFO, fmt, ap);
 }
 
+static void remaining_dec(docket_state_t *state)
+{
+	state->remaining--;
+
+	// We are the last one standing, close the connection
+	if (state->auto_close && state->remaining == 0) {
+		wire_wait_resume(&state->wait);
+	}
+}
+
 static void send_buf(docket_state_t *state, const char *buf, unsigned buf_len)
 {
 	size_t sent;
@@ -303,12 +313,7 @@ static void task_line_process(void *arg)
 	}
 
 Exit:
-	state->remaining--;
-
-	// We are the last one standing, close the connection
-	if (state->auto_close && state->remaining == 0) {
-		wire_wait_resume(&state->wait);
-	}
+	remaining_dec(state);
 }
 
 static int launch_collectors(docket_state_t *state, char *buf, size_t buf_len, size_t *processed)
