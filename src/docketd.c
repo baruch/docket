@@ -328,11 +328,15 @@ static int launch_collectors(docket_state_t *state, char *buf, size_t buf_len, s
 			break;
 		}
 
-		state->remaining++;
-		state->line = line;
-		wire_pool_alloc_block(&docket_pool, "line processor", task_line_process, state);
-		wire_yield(); // Wait for the wire to copy the line to itself
-		assert(state->line == NULL);
+		// Skip empty lines and comments
+		if (line[0] != 0 && line[0] != '#') {
+			state->remaining++;
+			state->line = line;
+			wire_pool_alloc_block(&docket_pool, "line processor", task_line_process, state);
+			wire_yield(); // Wait for the wire to copy the line to itself
+			assert(state->line == NULL);
+		}
+
 		line = newline+1;
 	}
 
