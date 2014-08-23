@@ -177,6 +177,49 @@ static void send_log_file(docket_state_t *state)
 	send_all(state, ".", "docket.log", state->log, state->log_len, sizeof(state->log));
 }
 
+static void render_filename(char *filename, size_t buflen, char **cmd, const char *suffix)
+{
+	size_t len = 0;
+	int cmd_idx = 0;
+	int cmd_offset = 0;
+
+	while (len < buflen-4 && cmd_idx < MAX_ARGS && cmd[cmd_idx]) {
+		switch (cmd[cmd_idx][cmd_offset]) {
+			case 0:
+				// Skip to the next command
+				filename[len] = '_';
+				cmd_offset = 0;
+				cmd_idx++;
+				break;
+			case '/':
+			case ' ':
+				// Translate slash and space to underscore to avoid opening a subdirectory
+				filename[len] = '_';
+				cmd_offset++;
+				break;
+			default:
+				filename[len] = cmd[cmd_idx][cmd_offset];
+				cmd_offset++;
+				break;
+		}
+
+		len++;
+	}
+
+	len--; // Backtrack on the last underscore
+	for (cmd_offset = 0; suffix[cmd_offset] != 0 && len < buflen-1; cmd_offset++) {
+		filename[len++] = suffix[cmd_offset];
+	}
+
+	filename[len] = 0;
+}
+
+static void flatten_filename(char *filename, size_t buflen, char *orig_filename)
+{
+	char *cmd[2] = {orig_filename, NULL};
+	render_filename(filename, buflen, cmd, "");
+}
+
 static void file_collector(docket_state_t *state, char *dir, char *filename)
 {
 	int fd;
@@ -184,6 +227,7 @@ static void file_collector(docket_state_t *state, char *dir, char *filename)
 	struct stat stbuf;
 	int nrcvd;
 	char buf[900*1024];
+	char flat_filename[128];
 
 	docket_log(state, "Collect file %s", filename);
 
@@ -216,9 +260,11 @@ static void file_collector(docket_state_t *state, char *dir, char *filename)
 		return;
 	}
 
+	flatten_filename(flat_filename, sizeof(flat_filename), filename);
+
 	if (stbuf.st_size == 0) {
 		// Read a proc/sysfs file, unknown size, assume fitting into a fixed buffer in one read
-		send_all(state, dir, filename, buf, nrcvd, sizeof(buf));
+		send_all(state, dir, flat_filename, buf, nrcvd, sizeof(buf));
 	} else {
 		// Read a regular file, known file in advance, requires more than one read
 		int nsent = 0;
@@ -230,7 +276,7 @@ static void file_collector(docket_state_t *state, char *dir, char *filename)
 			// case adjust the size, this is mostly relevant for sysfs files
 			size = nrcvd;
 		}
-		send_tar_header(state, dir, filename, size);
+		send_tar_header(state, dir, flat_filename, size);
 
 		send_buf(state, buf, nrcvd);
 		nsent += nrcvd;
@@ -280,43 +326,6 @@ struct fd_collector_args {
 	char dir[128];
 	char filename[128];
 };
-
-static void render_filename(char *filename, size_t buflen, char **cmd, const char *suffix)
-{
-	size_t len = 0;
-	int cmd_idx = 0;
-	int cmd_offset = 0;
-
-	while (len < buflen-4 && cmd_idx < MAX_ARGS && cmd[cmd_idx]) {
-		switch (cmd[cmd_idx][cmd_offset]) {
-			case 0:
-				// Skip to the next command
-				filename[len] = '_';
-				cmd_offset = 0;
-				cmd_idx++;
-				break;
-			case '/':
-			case ' ':
-				// Translate slash and space to underscore to avoid opening a subdirectory
-				filename[len] = '_';
-				cmd_offset++;
-				break;
-			default:
-				filename[len] = cmd[cmd_idx][cmd_offset];
-				cmd_offset++;
-				break;
-		}
-
-		len++;
-	}
-
-	len--; // Backtrack on the last underscore
-	for (cmd_offset = 0; suffix[cmd_offset] != 0 && len < buflen-1; cmd_offset++) {
-		filename[len++] = suffix[cmd_offset];
-	}
-
-	filename[len] = 0;
-}
 
 static void task_fd_collector(void *arg)
 {
