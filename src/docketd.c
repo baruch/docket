@@ -21,12 +21,14 @@
 #include <time.h>
 #include <assert.h>
 #include <stdarg.h>
+#include <signal.h>
 
 #define MAX_ARGS 20
 
 static wire_thread_t wire_main;
 static wire_t task_accept;
 static wire_pool_t docket_pool;
+static wire_pool_t exec_pool;
 
 typedef struct docket_state {
 	wire_net_t write_net;
@@ -269,6 +271,129 @@ static void glob_collector(docket_state_t *state, char *dir, char *pattern)
 	wio_globfree(&globbuf);
 }
 
+//////
+struct fd_collector_args {
+	docket_state_t *state;
+	int fd;
+	pid_t pid;
+	char dir[128];
+	char filename[128];
+};
+
+static void render_filename(char *filename, size_t buflen, char **cmd, const char *suffix)
+{
+	size_t len = 0;
+	int cmd_idx = 0;
+	int cmd_offset = 0;
+
+	while (len < buflen-4 && cmd_idx < MAX_ARGS && cmd[cmd_idx]) {
+		switch (cmd[cmd_idx][cmd_offset]) {
+			case 0:
+				// Skip to the next command
+				filename[len] = '_';
+				cmd_offset = 0;
+				cmd_idx++;
+				break;
+			case '/':
+			case ' ':
+				// Translate slash and space to underscore to avoid opening a subdirectory
+				filename[len] = '_';
+				cmd_offset++;
+				break;
+			default:
+				filename[len] = cmd[cmd_idx][cmd_offset];
+				cmd_offset++;
+				break;
+		}
+
+		len++;
+	}
+
+	len--; // Backtrack on the last underscore
+	for (cmd_offset = 0; suffix[cmd_offset] != 0 && len < buflen-1; cmd_offset++) {
+		filename[len++] = suffix[cmd_offset];
+	}
+
+	filename[len] = 0;
+}
+
+static void task_fd_collector(void *arg)
+{
+	struct fd_collector_args args;
+	char buf[900*1024];
+	unsigned buf_len = 0;
+	size_t nrcvd;
+	int ret;
+	wire_net_t net;
+
+	// Copy the args
+	memcpy(&args, arg, sizeof(args));
+
+	// Prepare to read the data
+	set_nonblock(args.fd);
+	wire_net_init(&net, args.fd);
+
+	// Read all the data
+	do {
+		wire_net_read_any(&net, buf+buf_len, sizeof(buf) - buf_len, &nrcvd);
+		ret = wio_read(args.fd, buf+buf_len, sizeof(buf)-buf_len);
+		if (ret >= 0)
+			buf_len += nrcvd;
+	} while (ret >= 0 && nrcvd > 0 && buf_len < sizeof(buf));
+
+	if (ret < 0) {
+		docket_log(args.state, "Failed to read from process pipe %s: %m", args.filename);
+	}
+
+	wire_net_close(&net);
+	wio_kill(args.pid, 9);
+
+	if (buf_len > 0)
+		send_all(args.state, args.dir, args.filename, buf, buf_len, sizeof(buf));
+	else
+		docket_log(args.state, "Collected from fd size zero, not emitting file %s", args.filename);
+
+	remaining_dec(args.state);
+}
+
+static void exec_collector(docket_state_t *state, char *dir, char **cmd)
+{
+	int out_fd;
+	int err_fd;
+	pid_t pid;
+
+	pid = wio_spawn(cmd, NULL, &out_fd, &err_fd);
+	if (pid < 0) {
+		docket_log(state, "Failed to spawn command %s %s %s %s %s %s, errno=%d (%m)",
+				cmd[0], cmd[1] ?  : "", cmd[2] ? : "", cmd[3] ? : "", cmd[4] ? : "", cmd[5] ? "..." : "",
+				errno);
+		return;
+	}
+
+	state->remaining += 2;
+
+	struct fd_collector_args out_args;
+	out_args.state = state;
+	out_args.pid = pid;
+	strncpy(out_args.dir, dir, sizeof(out_args.dir));
+	out_args.dir[sizeof(out_args.dir)-1] = 0;
+	out_args.fd = out_fd;
+	render_filename(out_args.filename, sizeof(out_args.filename), cmd, ".out");
+	wire_pool_alloc_block(&exec_pool, "fd processor", task_fd_collector, &out_args);
+
+	struct fd_collector_args err_args;
+	err_args.state = state;
+	err_args.pid = pid;
+	strncpy(err_args.dir, dir, sizeof(err_args.dir));
+	err_args.dir[sizeof(err_args.dir)-1] = 0;
+	err_args.fd = err_fd;
+	render_filename(err_args.filename, sizeof(err_args.filename), cmd, ".err");
+	wire_pool_alloc_block(&exec_pool, "fd processor", task_fd_collector, &err_args);
+
+	// Let the collector wires grab their arguments from out stack
+	wire_yield();
+}
+
 static void task_line_process(void *arg)
 {
 	docket_state_t *state = arg;
@@ -301,6 +426,11 @@ static void task_line_process(void *arg)
 			glob_collector(state, args[1], args[2]);
 		else
 			docket_log(state, "Not enough arguments to GLOB collector, got %d args", num_args);
+	} else if (strcmp(args[0], "EXEC") == 0) {
+		if (num_args >= 3)
+			exec_collector(state, args[1], &args[2]);
+		else
+			docket_log(state, "Not enough arguments to EXEC collector, got %d args", num_args);
 	} else if (strcmp(args[0], "PREFIX") == 0) {
 		if (num_args >= 2) {
 			strncpy(state->prefix, args[1], sizeof(state->prefix));
@@ -459,11 +589,14 @@ static void task_accept_run(void *arg)
 
 int main()
 {
+	signal(SIGCHLD, SIG_IGN);
+
 	wire_thread_init(&wire_main);
 	wire_fd_init();
 	wire_io_init(8);
 	wire_log_init_stdout();
 	wire_pool_init(&docket_pool, NULL, 32, 1024*1024);
+	wire_pool_init(&exec_pool, NULL, 32, 1024*1024);
 	wire_init(&task_accept, "accept", task_accept_run, NULL, WIRE_STACK_ALLOC(4096));
 	wire_thread_run();
 	return 0;
