@@ -333,17 +333,17 @@ static void task_fd_collector(void *arg)
 	// Prepare to read the data
 	set_nonblock(args.fd);
 	wire_net_init(&net, args.fd);
+	wire_timeout_reset(&net.tout, 120 * 1000); // 120 seconds
 
 	// Read all the data
 	do {
-		wire_net_read_any(&net, buf+buf_len, sizeof(buf) - buf_len, &nrcvd);
-		ret = wio_read(args.fd, buf+buf_len, sizeof(buf)-buf_len);
+		ret = wire_net_read_any(&net, buf+buf_len, sizeof(buf) - buf_len, &nrcvd);
 		if (ret >= 0)
 			buf_len += nrcvd;
 	} while (ret >= 0 && nrcvd > 0 && buf_len < sizeof(buf));
 
-	if (ret < 0) {
-		docket_log(args.state, "Failed to read from process pipe %s: %m", args.filename);
+	if (ret < 0 && errno != ENODATA) {
+		docket_log(args.state, "Failed to read from process pipe %s: %d (%m)", args.filename, errno);
 	}
 
 	wire_net_close(&net);
