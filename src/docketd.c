@@ -238,6 +238,27 @@ static void file_collector(docket_state_t *state, char *dir, char *filename)
 	wio_close(fd);
 }
 
+static void glob_collector(docket_state_t *state, char *dir, char *pattern)
+{
+	int ret;
+	glob_t globbuf;
+	int i;
+
+	memset(&globbuf, 0, sizeof(globbuf));
+	ret = wio_glob(pattern, GLOB_NOSORT, NULL, &globbuf);
+	if (ret != 0) {
+		docket_log(state, "Glob for pattern %s failed with error %d", pattern, ret);
+		return;
+	}
+
+	for (i = 0; i < globbuf.gl_pathc; i++) {
+		// TODO: In the future we can spawn more wires here to do all the files in parallel
+		file_collector(state, dir, globbuf.gl_pathv[i]);
+	}
+
+	wio_globfree(&globbuf);
+}
+
 static void task_line_process(void *arg)
 {
 	docket_state_t *state = arg;
@@ -265,6 +286,11 @@ static void task_line_process(void *arg)
 			file_collector(state, args[1], args[2]);
 		else
 			docket_log(state, "Not enough arguments to FILE collector, got %d args", num_args);
+	} else if (strcmp(args[0], "GLOB") == 0) {
+		if (num_args >= 3)
+			glob_collector(state, args[1], args[2]);
+		else
+			docket_log(state, "Not enough arguments to GLOB collector, got %d args", num_args);
 	} else if (strcmp(args[0], "PREFIX") == 0) {
 		if (num_args >= 2) {
 			strncpy(state->prefix, args[1], sizeof(state->prefix));
