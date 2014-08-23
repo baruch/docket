@@ -13,7 +13,7 @@ FILE|kernel|/proc/loadavg
 FILE|kernel|/proc/locks
 FILE|kernel|/proc/sched_debug
 FILE|kernel|/proc/softirqs
-FILE|kernel|/proc/stats
+FILE|kernel|/proc/stat
 FILE|kernel|/proc/timer_list
 FILE|kernel|/proc/timer_stats
 FILE|kernel|/proc/version
@@ -28,6 +28,7 @@ FILE|boot|/var/log/dmesg
 GLOB|boot|/boot/grub/grub.*
 FILE|boot|/proc/cmdline
 FILE|boot|/proc/uptime
+EXEC|boot|/usr/bin/uptime|-s
 
 FILE|logs|/var/log/messages
 FILE|logs|/var/log/syslog
@@ -63,22 +64,20 @@ EXEC|usb|/usr/bin/lsusb|-t
 EXEC|usb|/usr/bin/lsusb|-v
 
 EXEC|pci|/usr/bin/lspci
-EXEC|pci|/usr/bin/lspci|-t
+EXEC|pci|/usr/bin/lspci|-tv
 EXEC|pci|/usr/bin/lspci|-vvv
-EXEC|pci|/usr/bin/lspci|-xxx
+EXEC|pci|/usr/bin/lspci|-vvvxxx
 
 FILE|clock|/sys/devices/system/clocksource/clocksource0/current_clocksource
 FILE|clock|/sys/devices/system/clocksource/clocksource0/available_clocksource
-EXEC|clock|date|+%Y-%m-%d %H:%M:%S.%N %s.%N %Z %z
+EXEC|clock|/bin/date|+%Y-%m-%d %H:%M:%S.%N %s.%N %Z %z
 GLOB|clock|/var/log/ntpstats/*
 EXEC|clock|/usr/sbin/ntptime
 EXEC|clock|/usr/bin/ntpq|-pn
 EXEC|clock|/usr/bin/ntpq|-crv
 
 EXEC|server|/usr/sbin/dmidecode
-EXEC|server|/usr/bin/uptime
-EXEC|server|/usr/bin/uptime|-s
-EXEC|server|/bin/udevadm|--export-db
+EXEC|server|/bin/udevadm|info|--export-db
 
 EXEC|ipmi|/usr/bin/ipmitool|fru|print
 EXEC|ipmi|/usr/bin/ipmitool|mc|info
@@ -104,7 +103,7 @@ EXEC|ib|/usr/sbin/perfquery|-P|2
 
 EXEC|net|/sbin/ifconfig|-a
 EXEC|net|/sbin/route|-een
-EXEC|net|/sbin/arp|-a
+EXEC|net|/usr/sbin/arp|-a
 EXEC|net|/bin/netstat|-s
 EXEC|net|/bin/netstat|-an
 EXEC|net|/bin/netstat|-rn
@@ -115,10 +114,10 @@ EXEC|net|/sbin/ethtool|-g|%NET
 EXEC|net|/sbin/ethtool|-c|%NET
 EXEC|net|/sbin/ethtool|-d|%NET
 
-EXEC|fs|df
-EXEC|fs|df|-i
-EXEC|fs|mount
-EXEC|fs|find|/|-wholename|/proc*|-prune|-o|-ls
+EXEC|fs|/bin/df
+EXEC|fs|/bin/df|-i
+EXEC|fs|/bin/mount
+EXEC|fs|/usr/bin/find|/|-wholename|/proc*|-prune|-o|-ls
 
 FILE|root|/root/.bash_history
 
