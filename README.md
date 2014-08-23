@@ -14,6 +14,23 @@ Examples of files to collect include:
 * /proc/meminfo
 * /sbin/route -n
 
+## Command Structure
+
+A command is made up of a pipe '|' seperated line, for example:
+
+    FILE|proc|/proc/meminfo
+
+The first part is the command type, the next is the directory to put it into
+for grouping purposes and the third and onwards is the command and it's
+arguments.
+
+Available commands:
+* PREFIX -- Set global directory prefix for when collecting from multiple server
+* FILE -- Collect a single file
+* GLOB -- Collect a group of files based on a glob
+* FIND -- Collect a group of files based on the find command terms
+* EXEC -- Collect the output of a command, both stdout and stderr
+
 ## License
 
 MIT License, see LICENSE file for full text.
