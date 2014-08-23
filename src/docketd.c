@@ -189,6 +189,12 @@ static void file_collector(docket_state_t *state, char *dir, char *filename)
 		return;
 	}
 
+	if (!S_ISREG(stbuf.st_mode)) {
+		docket_log(state, "File %s is not a regular file", filename);
+		wio_close(fd);
+		return;
+	}
+
 	nrcvd = wio_read(fd, buf, sizeof(buf));
 	if (nrcvd < 0) {
 		// TODO: Log error
