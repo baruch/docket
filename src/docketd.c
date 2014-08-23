@@ -90,6 +90,7 @@ static int socket_setup(unsigned short port)
 	return fd;
 }
 
+static void docket_log(docket_state_t *state, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 static void docket_log(docket_state_t *state, const char *fmt, ...)
 {
 	va_list ap;
