@@ -209,21 +209,28 @@ static void file_collector(docket_state_t *state, char *dir, char *filename)
 	} else {
 		// Read a regular file, known file in advance, requires more than one read
 		int nsent = 0;
+		unsigned size = stbuf.st_size;
 		wire_lock_take(&state->write_lock);
-		send_tar_header(state, dir, filename, stbuf.st_size);
+
+		if (nrcvd < sizeof(buf)) {
+			// It's possible the file size is smaller than one buffer, in which
+			// case adjust the size, this is mostly relevant for sysfs files
+			size = nrcvd;
+		}
+		send_tar_header(state, dir, filename, size);
 
 		send_buf(state, buf, nrcvd);
 		nsent += nrcvd;
-		while (nsent < stbuf.st_size) {
+		while (nsent < size) {
 			nrcvd = wio_read(fd, buf, sizeof(buf));
 			if (nrcvd <= 0) {
-				nsent += send_buf_zeros(state, buf, sizeof(buf), stbuf.st_size - nsent);
+				nsent += send_buf_zeros(state, buf, sizeof(buf), size - nsent);
 			} else {
 				send_buf(state, buf, nrcvd);
 				nsent += nrcvd;
 			}
 		}
-		send_tar_pad(state, buf, sizeof(buf), stbuf.st_size);
+		send_tar_pad(state, buf, sizeof(buf), size);
 
 		wire_lock_release(&state->write_lock);
 	}
