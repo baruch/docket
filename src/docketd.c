@@ -1,5 +1,6 @@
 #include "docket.h"
 #include "tar.h"
+#include "special_arg.h"
 
 #include "wire.h"
 #include "wire_fd.h"
@@ -366,7 +367,7 @@ static void task_fd_collector(void *arg)
 	remaining_dec(args.state);
 }
 
-static void exec_collector(docket_state_t *state, char *dir, char **cmd)
+static void exec_collector_spawn_one(docket_state_t *state, char *dir, char **cmd)
 {
 	int out_fd;
 	int err_fd;
@@ -402,6 +403,34 @@ static void exec_collector(docket_state_t *state, char *dir, char **cmd)
 
 	// Let the collector wires grab their arguments from out stack
 	wire_yield();
+}
+
+static void exec_collector(docket_state_t *state, char *dir, char **cmd)
+{
+	int special_idx;
+	char items[32][32];
+	int num_items;
+	char *param = NULL;
+
+	for (special_idx = 1; cmd[special_idx] != NULL; special_idx++) {
+		num_items = special_arg_match(cmd[special_idx], items, ARRAY_SIZE(items));
+		// Only one special argument is supported
+		if (num_items)
+			break;
+	}
+
+	if (num_items == 0) {
+		exec_collector_spawn_one(state, dir, cmd);
+	} else {
+		int i;
+
+		param = cmd[special_idx];
+		for (i = 0; i < num_items; i++) {
+			cmd[special_idx] = items[i];
+			docket_log(state, "Collecting exec with parameter %s value %s", param, items[i]);
+			exec_collector_spawn_one(state, dir, cmd);
+		}
+	}
 }
 
 static void task_line_process(void *arg)
