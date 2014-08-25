@@ -183,6 +183,11 @@ static void render_filename(char *filename, size_t buflen, char **cmd, const cha
 	size_t len = 0;
 	int cmd_idx = 0;
 	int cmd_offset = 0;
+	char *slash;
+
+	slash = strrchr(cmd[0], '/');
+	if (slash)
+		cmd_offset = slash - cmd[0] + 1;
 
 	while (len < buflen-4 && cmd_idx < MAX_ARGS && cmd[cmd_idx]) {
 		switch (cmd[cmd_idx][cmd_offset]) {
@@ -217,7 +222,7 @@ static void render_filename(char *filename, size_t buflen, char **cmd, const cha
 
 static void flatten_filename(char *filename, size_t buflen, char *orig_filename)
 {
-	char *cmd[2] = {orig_filename, NULL};
+	char *cmd[3] = {"", orig_filename, NULL};
 	render_filename(filename, buflen, cmd, "");
 }
 
