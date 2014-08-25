@@ -8,7 +8,7 @@
 
 #define ARRAY_SIZE(a) (sizeof(a)/sizeof(a[0]))
 
-static int special_arg_net(char items[32][32], unsigned items_size)
+static int special_arg_net(char **items, unsigned items_size, unsigned item_size)
 {
 	struct ifaddrs *ifaddr;
 	struct ifaddrs *ifa;
@@ -23,7 +23,7 @@ static int special_arg_net(char items[32][32], unsigned items_size)
 		return 0;
 	}
 
-	for (ifa = ifaddr, n = 0; ifa != NULL; ifa = ifa->ifa_next, n++) {
+	for (ifa = ifaddr, n = 0; items_len < items_size && ifa != NULL; ifa = ifa->ifa_next, n++) {
 		if (ifa->ifa_addr == NULL)
 			continue;
 
@@ -44,22 +44,22 @@ static int special_arg_net(char items[32][32], unsigned items_size)
 		}
 
 		if (!found) {
-			strncpy(&items[items_len][0], ifa->ifa_name, 31);
-			items[items_len][31] = 0;
+			strncpy(items[items_len], ifa->ifa_name, item_size);
+			items[items_len][item_size-1] = 0;
 			items_len++;
 		}
 	}
 
 	freeifaddrs(ifaddr);
 
-	return 3;
+	return items_len;
 }
 
-int special_arg_match(const char *name, char items[32][32], unsigned items_size)
+int special_arg_match(const char *name, char **items, unsigned items_size, unsigned item_size)
 {
 	static const struct {
 		const char *name;
-		int (*func)(char items[32][32], unsigned items_size);
+		int (*func)(char **items, unsigned items_size, unsigned item_size);
 	} specials[] = {
 //		{"%BLOCK", special_arg_block},
 //		{"%SES", special_arg_ses},
@@ -73,7 +73,7 @@ int special_arg_match(const char *name, char items[32][32], unsigned items_size)
 	int j;
 	for (j = 0; j < ARRAY_SIZE(specials); j++) {
 		if (strcmp(name, specials[j].name) == 0) {
-			return specials[j].func(items, items_size);
+			return specials[j].func(items, items_size, item_size);
 		}
 	}
 

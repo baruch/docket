@@ -407,13 +407,18 @@ static void exec_collector_spawn_one(docket_state_t *state, char *dir, char **cm
 
 static void exec_collector(docket_state_t *state, char *dir, char **cmd)
 {
-	int special_idx;
-	char items[32][32];
-	int num_items;
+	char ritems[32][32];
+	char *items[32];
+	int num_items = 0;
 	char *param = NULL;
+	int i;
+	int special_idx;
+
+	for (i = 0; i < 32; i++)
+		items[i] = ritems[i];
 
 	for (special_idx = 1; cmd[special_idx] != NULL; special_idx++) {
-		num_items = special_arg_match(cmd[special_idx], items, ARRAY_SIZE(items));
+		num_items = special_arg_match(cmd[special_idx], items, ARRAY_SIZE(items), 32);
 		// Only one special argument is supported
 		if (num_items)
 			break;
@@ -422,8 +427,6 @@ static void exec_collector(docket_state_t *state, char *dir, char **cmd)
 	if (num_items == 0) {
 		exec_collector_spawn_one(state, dir, cmd);
 	} else {
-		int i;
-
 		param = cmd[special_idx];
 		for (i = 0; i < num_items; i++) {
 			cmd[special_idx] = items[i];
