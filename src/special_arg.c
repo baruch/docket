@@ -128,8 +128,8 @@ int special_arg_match(const char *name, char **items, unsigned items_size, unsig
 		int (*func)(char **items, unsigned items_size, unsigned item_size);
 	} specials[] = {
 		{"%BLOCK", special_arg_block},
-//		{"%SES", special_arg_ses},
-//		{"%SCSI", special_arg_scsi},
+//TODO:		{"%SES", special_arg_ses},
+//TODO:		{"%SCSI", special_arg_scsi},
 		{"%NET", special_arg_net},
 	};
 
