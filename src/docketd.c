@@ -1,6 +1,7 @@
 #include "docket.h"
 #include "tar.h"
 #include "special_arg.h"
+#include "dev_list.h"
 
 #include "wire.h"
 #include "wire_fd.h"
@@ -645,6 +646,7 @@ int main()
 	wire_pool_init(&docket_pool, NULL, 32, 1024*1024);
 	wire_pool_init(&exec_pool, NULL, 32, 1024*1024);
 	wire_init(&task_accept, "accept", task_accept_run, NULL, WIRE_STACK_ALLOC(4096));
+	dev_list_init();
 	wire_thread_run();
 	return 0;
 }

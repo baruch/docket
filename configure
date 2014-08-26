@@ -5,7 +5,7 @@ common_srcs = [
 ]
 
 docketd_srcs = [
-        'docketd', 'special_arg',
+        'docketd', 'special_arg', 'dev_list'
 ]
 
 docket_srcs = [
