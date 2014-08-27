@@ -20,7 +20,7 @@ FILE|kernel|/proc/version
 FIND|kernel|/proc|-regex|/proc/[0-9]+.*(status\|wchan\|sched)
 EXEC|kernel|/sbin/sysctl|-a
 FILE|kernel|/proc/modules
-FIND|kernel|/proc/irq
+TREE|kernel|/proc/irq
 GLOB|kernel|/sys/module/*/version
 
 FILE|boot|/var/log/boot.log

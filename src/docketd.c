@@ -325,6 +325,74 @@ static void glob_collector(docket_state_t *state, char *dir, char *pattern)
 	wio_globfree(&globbuf);
 }
 
+struct tree_args {
+	docket_state_t *state;
+	char *dir;
+	char *basepath;
+	char *name;
+};
+
+static void task_tree_collector_file(void *arg)
+{
+	struct tree_args *tree_args = arg;
+	docket_state_t *state = tree_args->state;
+	char dir[128];
+	char basepath[128];
+
+	strcpy(dir, tree_args->dir);
+	snprintf(basepath, sizeof(basepath), "%s/%s", tree_args->basepath, tree_args->name);
+	// At this stage we are clear to reschedule
+
+	docket_log(state, "Tree collector for file %s", basepath);
+	file_collector(state, dir, basepath);
+}
+
+static void tree_collector(docket_state_t *state, char *dir, char *basepath)
+{
+	DIR *dirent;
+	struct dirent *entry;
+	struct tree_args tree_args;
+	char new_basepath[128];
+
+	dirent = wio_opendir(basepath);
+	if (!dirent) {
+		docket_log(state, "Failed to open directory %s: %d (%m)", basepath, errno);
+		return;
+	}
+
+	docket_log(state, "Tree collector for %s", basepath);
+
+	tree_args.state = state;
+	tree_args.dir = dir;
+	tree_args.basepath = basepath;
+
+	errno = 0;
+	while ( (entry = wio_readdir(dirent)) != NULL ) {
+		switch (entry->d_type) {
+			case DT_DIR:
+				if (entry->d_name[0] != '.') {
+					snprintf(new_basepath, sizeof(new_basepath), "%s/%s", basepath, entry->d_name);
+					tree_collector(state, dir, new_basepath);
+				}
+				break;
+
+			case DT_REG:
+				tree_args.name = entry->d_name;
+				wire_pool_alloc_block(&exec_pool, "tree collector file", task_tree_collector_file, &tree_args);
+				wire_yield(); // Let it copy the arguments
+				break;
+
+			default:
+				docket_log(state, "Not collecting file %s in %s since it is not a file or directory", entry->d_name, basepath);
+				break;
+		}
+		errno = 0;
+	}
+
+
+	wio_closedir(dirent);
+}
+
 //////
 struct fd_collector_args {
 	docket_state_t *state;
@@ -474,6 +542,11 @@ static void task_line_process(void *arg)
 			glob_collector(state, args[1], args[2]);
 		else
 			docket_log(state, "Not enough arguments to GLOB collector, got %d args", num_args);
+	} else if (strcmp(args[0], "TREE") == 0) {
+		if (num_args >= 3)
+			tree_collector(state, args[1], args[2]);
+		else
+			docket_log(state, "Not enough arguments to TREE collector, got %d args", num_args);
 	} else if (strcmp(args[0], "EXEC") == 0) {
 		if (num_args >= 3)
 			exec_collector(state, args[1], &args[2]);
