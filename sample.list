@@ -17,7 +17,7 @@ FILE|kernel|/proc/stat
 FILE|kernel|/proc/timer_list
 FILE|kernel|/proc/timer_stats
 FILE|kernel|/proc/version
-FIND|kernel|/proc|-regex|/proc/[0-9]+.*(status\|wchan\|sched)
+FIND|kernel|/proc|-regex|/proc/[0-9]+.*\\(status\\\|wchan\\\|sched\\)
 EXEC|kernel|/sbin/sysctl|-a
 FILE|kernel|/proc/modules
 TREE|kernel|/proc/irq

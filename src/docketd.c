@@ -509,6 +509,91 @@ static void exec_collector(docket_state_t *state, char *dir, char **cmd)
 	}
 }
 
+static size_t process_find_collector(docket_state_t *state, char *dir, char *buf, size_t buf_len)
+{
+	size_t processed = 0;
+	char *null;
+	struct tree_args tree_args;
+
+	tree_args.state = state;
+	tree_args.dir = dir;
+	tree_args.basepath = "/";
+
+	do {
+		null = memchr(buf + processed, 0, buf_len - processed);
+		if (!null)
+			return buf_len - processed;
+
+		tree_args.name = buf + processed;
+
+		docket_log(state, "Find collector for %s", buf+processed);
+		wire_pool_alloc_block(&exec_pool, "find collector file", task_tree_collector_file, &tree_args);
+		wire_yield(); // Let it copy the arguments
+
+		processed = null - buf + 1;
+	} while (buf_len - processed > 0);
+
+	return buf_len - processed;
+}
+
+static void find_collector(docket_state_t *state, char *dir, char **cmd)
+{
+	char *args[MAX_ARGS+3];
+	int i, j;
+	pid_t pid;
+	int out_fd;
+	wire_net_t net;
+	size_t buf_len;
+	int ret;
+	size_t nrcvd;
+	char buf[500*1024];
+
+	j = 0;
+	args[j++] = "/usr/bin/find";
+	for (i = 0; i < MAX_ARGS && cmd[i] != NULL; i++)
+		args[j++] = cmd[i];
+	args[j++] = "-print0";
+	args[j] = 0;
+
+	pid = wio_spawn(args, NULL, &out_fd, NULL);
+	if (pid < 0) {
+		docket_log(state, "Error spawning Find process");
+		return;
+	}
+
+	// Loop over stdout, split file names by a null character and run file collectors on that
+
+	// Prepare to read the data
+	set_nonblock(out_fd);
+	wire_net_init(&net, out_fd);
+	wire_timeout_reset(&net.tout, 10 * 60 * 1000); // 10 minutes
+
+	// Read all the data
+	buf_len = 0;
+	do {
+		ret = wire_net_read_any(&net, buf+buf_len, sizeof(buf)-buf_len, &nrcvd);
+		if (ret >= 0) {
+			buf_len += nrcvd;
+			size_t remaining_buf_len = process_find_collector(state, dir, buf, buf_len);
+			if (remaining_buf_len > 0 && remaining_buf_len != buf_len) {
+				// Move the buf to the start
+				memmove(buf, buf + buf_len - remaining_buf_len, remaining_buf_len);
+				buf_len = remaining_buf_len;
+			}
+		}
+	} while (ret >= 0 && nrcvd > 0 && buf_len < sizeof(buf));
+
+	if (ret < 0 && errno != ENODATA) {
+		docket_log(state, "Failed to read from process pipe for find: %d (%m)", errno);
+	}
+
+	wire_net_close(&net);
+	wio_kill(pid, 9);
+
+	// Process any remaining data
+	process_find_collector(state, dir, buf, buf_len);
+}
+
 #define ARG_LEN 64
 static void task_line_process(void *arg)
 {
@@ -590,6 +675,11 @@ static void task_line_process(void *arg)
 			exec_collector(state, args[1], &args[2]);
 		else
 			docket_log(state, "Not enough arguments to EXEC collector, got %d args", num_args);
+	} else if (strcmp(args[0], "FIND") == 0) {
+		if (num_args >= 3)
+			find_collector(state, args[1], &args[2]);
+		else
+			docket_log(state, "Not enough arguments to FIND collector, got %d args", num_args);
 	} else if (strcmp(args[0], "PREFIX") == 0) {
 		if (num_args >= 2) {
 			strncpy(state->prefix, args[1], sizeof(state->prefix));
