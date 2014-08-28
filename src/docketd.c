@@ -509,24 +509,63 @@ static void exec_collector(docket_state_t *state, char *dir, char **cmd)
 	}
 }
 
+#define ARG_LEN 64
 static void task_line_process(void *arg)
 {
 	docket_state_t *state = arg;
-	char *saveptr = NULL;
-	char line[128];
+	char *p;
+	char raw_args[MAX_ARGS][ARG_LEN];
 	char *args[MAX_ARGS];
 	int num_args = 0;
-
-	// Copy the line locally to avoid it getting overrun
-	strncpy(line, state->line, sizeof(line));
-	line[sizeof(line)-1] = 0;
-	state->line = NULL;
+	int arg_offset = 0;
+	int escaped = 0;
 
 	// Break up the line into the different arguments, seperated by the vertical line '|'
-	args[num_args] = strtok_r(line, "|", &saveptr);
-	while (args[num_args] != NULL && num_args < MAX_ARGS) {
-		args[++num_args] = strtok_r(NULL, "|", &saveptr);
+	args[0] = &raw_args[0][0];
+	for (p = state->line; *p; p++) {
+		switch (*p) {
+			case '\\':
+				if (!escaped) {
+					escaped = 1;
+				} else {
+					escaped = 0;
+					args[num_args][arg_offset] = '\\';
+					arg_offset++;
+				}
+				break;
+			case '|':
+				if (!escaped) {
+					args[num_args][arg_offset] = 0;
+					num_args++;
+					arg_offset = 0;
+					args[num_args] = &raw_args[num_args][0];
+					if (num_args == MAX_ARGS) {
+						docket_log(state, "Too many argument in line %s", state->line);
+						state->remaining--;
+						return;
+					}
+				} else {
+					escaped = 0;
+					args[num_args][arg_offset] = '|';
+					arg_offset++;
+				}
+				break;
+			default:
+				escaped = 0;
+				args[num_args][arg_offset] = *p;
+				arg_offset++;
+				if (arg_offset >= ARG_LEN) {
+					docket_log(state, "Argument %d in line command %s is over the limit", num_args, state->line);
+					state->remaining--;
+					return;
+				}
+				break;
+		}
 	}
+	args[num_args][arg_offset] = 0;
+	num_args++;
+	args[num_args] = NULL;
+	state->line = NULL;
 
 	if (num_args == 0)
 		goto Exit;
@@ -589,7 +628,6 @@ static int launch_collectors(docket_state_t *state, char *buf, size_t buf_len, s
 			state->line = line;
 			wire_pool_alloc_block(&docket_pool, "line processor", task_line_process, state);
 			wire_yield(); // Wait for the wire to copy the line to itself
-			assert(state->line == NULL);
 		}
 
 		line = newline+1;
