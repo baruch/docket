@@ -389,7 +389,6 @@ static void tree_collector(docket_state_t *state, char *dir, char *basepath)
 		errno = 0;
 	}
 
-
 	wio_closedir(dirent);
 }
 
