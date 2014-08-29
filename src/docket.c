@@ -29,7 +29,7 @@ static int docket_send_collection(wire_net_t *net, const char *ip, const char *n
 	int fd;
 	char buf[48*1024];
 
-	ret = snprintf(buf, sizeof(buf), "PREFIX %s\n", name);
+	ret = snprintf(buf, sizeof(buf), "PREFIX|%s\n", name);
 	nrcvd = ret;
 	ret = wire_net_write(net, buf, nrcvd, &nsent);
 	if (ret < 0 || nrcvd != nsent) {
