@@ -838,6 +838,7 @@ static void task_accept_run(void *arg)
 int main()
 {
 	signal(SIGCHLD, SIG_IGN);
+	signal(SIGPIPE, SIG_IGN);
 
 	wire_thread_init(&wire_main);
 	wire_fd_init();
