@@ -61,7 +61,7 @@ static void set_reuse(int fd)
 
 static int socket_setup(unsigned short port)
 {
-	int fd = socket(AF_INET, SOCK_STREAM, 0);
+	int fd = socket(AF_INET, SOCK_CLOEXEC|SOCK_STREAM, 0);
 	if (fd < 0) {
 		wire_log(WLOG_ERR, "Failed to create socket: %m");
 		return -1;
