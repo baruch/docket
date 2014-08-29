@@ -92,7 +92,6 @@ static int docket_collect_tar(wire_net_t *net, const char *ip)
 		file_len += digit;
 	}
 
-	wire_log(WLOG_INFO, "file size is %u", file_len);
 	if (file_len % 512 != 0)
 		file_len += 512 - (file_len % 512);
 
