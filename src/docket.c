@@ -65,6 +65,7 @@ static int docket_send_collection(wire_net_t *net, const char *ip, const char *n
 	}
 
 	wio_close(fd);
+	shutdown(net->fd_state.fd, SHUT_WR);
 	return res;
 }
 
