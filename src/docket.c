@@ -79,6 +79,8 @@ static int docket_collect_tar(wire_net_t *net, const char *ip)
 	unsigned file_len = 0;
 	struct tar *tar;
 
+	wire_timeout_reset(&net->tout, 120*1000);
+
 	ret = wire_net_read_full(net, buf, 512, &nrcvd);
 	if (ret < 0 || nrcvd != 512) {
 		wire_log(WLOG_ERR, "Error receiving tar header ret=%d errno=%d (%m)", ret, errno);
@@ -106,6 +108,8 @@ static int docket_collect_tar(wire_net_t *net, const char *ip)
 	}
 
 	while (file_len > 0) {
+		wire_timeout_reset(&net->tout, 120*1000);
+
 		size_t toread = file_len > sizeof(buf) ? sizeof(buf) : file_len;
 		ret = wire_net_read_full(net, buf, toread, &nrcvd);
 		if ((ret < 0 && errno != ENODATA) || nrcvd != toread) {
