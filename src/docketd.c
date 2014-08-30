@@ -290,10 +290,14 @@ static void file_collector(docket_state_t *state, char *dir, char *filename)
 		send_buf(state, buf, nrcvd);
 		nsent += nrcvd;
 		while (nsent < size) {
-			nrcvd = wio_read(fd, buf, sizeof(buf));
+			unsigned remaining = size - nsent;
+			unsigned toread = remaining > sizeof(buf) ? sizeof(buf) : remaining;
+			nrcvd = wio_read(fd, buf, toread);
 			if (nrcvd <= 0) {
+				wire_log(WLOG_DEBUG, "sending zeroes %u", nrcvd);
 				nsent += send_buf_zeros(state, buf, sizeof(buf), size - nsent);
 			} else {
+				wire_log(WLOG_DEBUG, "sending data %u", nrcvd);
 				send_buf(state, buf, nrcvd);
 				nsent += nrcvd;
 			}
