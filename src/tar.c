@@ -1,5 +1,7 @@
 #include "tar.h"
 
+#include "wire_log.h"
+
 #include <memory.h>
 #include <assert.h>
 #include <stdio.h>
@@ -12,6 +14,8 @@ void tar_set_header(struct tar *hdr, const char *prefix, const char *dir, const 
 {
 	assert(sizeof(*hdr) == 512);
 	memset(hdr, 0, sizeof(*hdr));
+
+	wire_log(WLOG_DEBUG, "tar header for ./%s/%s/%s file size %u timestamp %u", prefix, dir, filename, filesize, timestamp);
 
 	snprintf(hdr->filename, sizeof(hdr->filename), "./%s/%s/%s", prefix, dir, filename);
 	memcpy(hdr->mode, DEFAULT_MODE, sizeof(DEFAULT_MODE)); assert(sizeof(DEFAULT_MODE) == sizeof(hdr->mode));
