@@ -158,7 +158,7 @@ static void send_tar_pad(docket_state_t *state, char *buf, unsigned buf_size, un
 	send_buf_zeros(state, buf, buf_size, filesize);
 }
 
-static void send_tar_header(docket_state_t *state, const char *dir, char *filename, int file_size)
+static void send_tar_header(docket_state_t *state, const char *dir, char *filename, unsigned file_size)
 {
 	struct tar hdr;
 	size_t sent;
