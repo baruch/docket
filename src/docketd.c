@@ -133,6 +133,8 @@ static unsigned send_buf_zeros(docket_state_t *state, char *buf, unsigned buf_si
 {
 	unsigned sent = 0;
 
+	if (sendbytes < buf_size)
+		buf_size = sendbytes;
 	memset(buf, 0, buf_size);
 
 	while (sent < sendbytes) {
