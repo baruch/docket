@@ -95,14 +95,14 @@ static int docket_collect_tar(wire_net_t *net, const char *ip)
 		file_len += digit;
 	}
 
+	wire_lock_take(&out_lock);
+
 	wire_log(WLOG_DEBUG, "tar header for %s file size %s decimal %u", tar->filename, tar->filesize, file_len);
 
 	if (file_len % 512 != 0)
 		file_len += 512 - (file_len % 512);
 
 	wire_log(WLOG_DEBUG, "rounded tar file size %u", file_len);
-
-	wire_lock_take(&out_lock);
 
 	ret = wire_net_write(&out_net, buf, 512, &nsent);
 	if (ret < 0 || nsent != 512) {
